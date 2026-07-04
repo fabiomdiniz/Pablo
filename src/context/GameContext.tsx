@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useReducer, useCallback } from "react";
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useState, useRef } from "react";
 import type { GameState, GameAction, GameTrack } from "@/lib/types";
 
 /* ── Reducer ── */
@@ -22,10 +22,7 @@ const initialState: GameState = {
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "FETCH_START":
-      return {
-        ...initialState,
-        phase: "loading",
-      };
+      return { ...state, phase: "loading", currentTrack: state.currentTrack, error: null };
 
     case "FETCH_SUCCESS": {
       const shuffled = [...action.tracks].sort(() => Math.random() - 0.5);
@@ -40,17 +37,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case "FETCH_ERROR":
-      return {
-        ...initialState,
-        phase: "idle",
-        error: action.error,
-      };
+      return { ...initialState, phase: "idle", error: action.error };
 
     case "START_GAME": {
       const track = pickRandomTrack(state.tracks, state.playedIds);
-      if (!track) {
-        return { ...state, phase: "finished", currentTrack: null };
-      }
+      if (!track) return { ...state, phase: "finished", currentTrack: null };
       const newPlayed = new Set(state.playedIds);
       newPlayed.add(track.id);
       return {
@@ -68,16 +59,22 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "NEXT": {
       const track = pickRandomTrack(state.tracks, state.playedIds);
-      if (!track) {
-        return { ...state, phase: "finished", currentTrack: state.currentTrack };
-      }
+      if (!track) return { ...state, phase: "finished", currentTrack: state.currentTrack };
       const newPlayed = new Set(state.playedIds);
       newPlayed.add(track.id);
+      return { ...state, phase: "playing", currentTrack: track, playedIds: newPlayed };
+    }
+
+    case "RESTART_GAME": {
+      // Reshuffle and reset — no re-fetch
+      const reshuffled = [...state.tracks].sort(() => Math.random() - 0.5);
       return {
         ...state,
-        phase: "playing",
-        currentTrack: track,
-        playedIds: newPlayed,
+        phase: "ready",
+        tracks: reshuffled,
+        playedIds: new Set(),
+        currentTrack: state.currentTrack, // keep so AudioPlayer can pause
+        error: null,
       };
     }
 
@@ -95,14 +92,37 @@ interface GameContextValue {
   state: GameState;
   dispatch: React.Dispatch<GameAction>;
   fetchTracks: (urls: string[]) => Promise<void>;
+  reloadTracks: () => Promise<void>;
+  lastUrls: string[];
+  isAuthenticated: boolean;
+  authChecked: boolean;
+  checkAuth: () => Promise<void>;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const lastUrlsRef = useRef<string[]>([]);
 
-  const fetchTracks = useCallback(async (urls: string[]) => {
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/spotify/me");
+      const data = await res.json();
+      setIsAuthenticated(data.authenticated === true);
+    } catch {
+      setIsAuthenticated(false);
+    }
+    setAuthChecked(true);
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const doFetch = useCallback(async (urls: string[]) => {
     dispatch({ type: "FETCH_START" });
     try {
       const res = await fetch("/api/spotify/tracks", {
@@ -112,10 +132,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.needsAuth) setIsAuthenticated(false);
         dispatch({ type: "FETCH_ERROR", error: data.error || "Failed to fetch tracks." });
         return;
       }
       dispatch({ type: "FETCH_SUCCESS", tracks: data.tracks });
+      // Update browser URL with loaded playlists
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams();
+        urls.forEach((u: string) => params.append("p", u));
+        window.history.replaceState(null, "", `/?${params.toString()}`);
+      }
     } catch {
       dispatch({
         type: "FETCH_ERROR",
@@ -124,8 +151,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const fetchTracks = useCallback(async (urls: string[]) => {
+    lastUrlsRef.current = urls;
+    await doFetch(urls);
+  }, [doFetch]);
+
+  const reloadTracks = useCallback(async () => {
+    if (lastUrlsRef.current.length === 0) return;
+    await doFetch(lastUrlsRef.current);
+  }, [doFetch]);
+
   return (
-    <GameContext.Provider value={{ state, dispatch, fetchTracks }}>
+    <GameContext.Provider
+      value={{
+        state, dispatch, fetchTracks, reloadTracks,
+        lastUrls: lastUrlsRef.current,
+        isAuthenticated, authChecked, checkAuth,
+      }}
+    >
       {children}
     </GameContext.Provider>
   );

@@ -1,62 +1,71 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Howl } from "howler";
+import { useSpotifyPlayer } from "@/context/SpotifyPlayerContext";
 import type { GameTrack } from "@/lib/types";
 
-interface AudioPlayerProps {
-  track: GameTrack | null;
-  isPlaying: boolean;
-  onEnd: () => void;
+const SNIPPET_DURATION_MS = 30_000; // 30 seconds
+
+/** Pick a random position between 20% and 70% of the track */
+function randomMidpoint(durationMs: number): number {
+  const min = Math.floor(durationMs * 0.2);
+  const max = Math.floor(durationMs * 0.7);
+  return Math.floor(Math.random() * (max - min)) + min;
 }
 
-export default function AudioPlayer({ track, isPlaying, onEnd }: AudioPlayerProps) {
-  const howlRef = useRef<Howl | null>(null);
+export default function AudioPlayer({ track, isPlaying }: AudioPlayerProps) {
+  const { isReady, playTrack, pause } = useSpotifyPlayer();
+  const lastTrackId = useRef<string | null>(null);
+  const snippetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear timer helper
+  const clearSnippetTimer = () => {
+    if (snippetTimer.current) {
+      clearTimeout(snippetTimer.current);
+      snippetTimer.current = null;
+    }
+  };
 
   useEffect(() => {
-    // Clean up previous Howl
-    if (howlRef.current) {
-      howlRef.current.unload();
-      howlRef.current = null;
-    }
+    if (!track || !isReady || !isPlaying) return;
 
-    if (!track) return;
+    // Only play if it's a new track
+    if (lastTrackId.current === track.id) return;
+    lastTrackId.current = track.id;
 
-    howlRef.current = new Howl({
-      src: [track.previewUrl],
-      html5: true,
-      format: ["mp3"],
-      onend: () => {
-        onEnd();
-      },
-      onloaderror: (_id: unknown, err: unknown) => {
-        console.error("Howler load error:", err);
-      },
+    // Clear any previous timer
+    clearSnippetTimer();
+
+    const startMs = randomMidpoint(track.durationMs);
+
+    playTrack(track.uri, startMs).catch((err) => {
+      console.error("[AudioPlayer] Play failed:", err);
     });
 
-    if (isPlaying) {
-      howlRef.current.play();
-    }
+    // Auto-stop after 30 seconds
+    snippetTimer.current = setTimeout(() => {
+      pause().catch(() => {});
+    }, SNIPPET_DURATION_MS);
+  }, [track, isPlaying, isReady, playTrack, pause]);
 
-    return () => {
-      if (howlRef.current) {
-        howlRef.current.unload();
-        howlRef.current = null;
-      }
-    };
-    // We intentionally only recreate when the track changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track?.id]);
-
-  // Handle play/pause from game phase changes
+  // Pause when game leaves playing phase
   useEffect(() => {
-    if (!howlRef.current) return;
-    if (isPlaying) {
-      howlRef.current.play();
-    } else {
-      howlRef.current.pause();
+    if (!isPlaying && lastTrackId.current) {
+      clearSnippetTimer();
+      pause().catch(() => {});
     }
-  }, [isPlaying]);
+  }, [isPlaying, pause]);
 
-  return null; // Renders nothing — audio only
+  // Reset on unmount (pause if still playing)
+  useEffect(() => {
+    return () => {
+      clearSnippetTimer();
+      if (lastTrackId.current) {
+        pause().catch(() => {});
+      }
+      lastTrackId.current = null;
+    };
+  }, [pause]);
+
+  return null;
 }

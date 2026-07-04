@@ -2,6 +2,7 @@
 
 export interface SpotifyTrack {
   id: string;
+  uri: string;
   name: string;
   preview_url: string | null;
   album: {
@@ -14,21 +15,22 @@ export interface SpotifyTrack {
   duration_ms: number;
 }
 
-export interface PlaylistTracksResponse {
+export interface PlaylistItemsResponse {
   items: {
-    track: SpotifyTrack | null;
+    item: SpotifyTrack | null;
   }[];
   next: string | null;
   total: number;
 }
 
-/* ── Our app's track shape (only tracks with preview_url) ── */
+/* ── Our app's track shape ── */
 
 export interface GameTrack {
   id: string;
+  uri: string;
   title: string;
   artist: string;
-  previewUrl: string;
+  durationMs: number;
   releaseDate: string;
   releaseYear: string;
   albumArt: string;
@@ -59,4 +61,5 @@ export type GameAction =
   | { type: "START_GAME" }
   | { type: "REVEAL" }
   | { type: "NEXT" }
+  | { type: "RESTART_GAME" }
   | { type: "RESET" };

@@ -1,14 +1,16 @@
 "use client";
 
 import { useGame } from "@/context/GameContext";
+import { useSpotifyPlayer } from "@/context/SpotifyPlayerContext";
 import HiddenCard from "./HiddenCard";
 import RevealedCard from "./RevealedCard";
 import AudioPlayer from "./AudioPlayer";
 import GameControls from "./GameControls";
 
 export default function GameBoard() {
-  const { state, dispatch } = useGame();
+  const { state } = useGame();
   const { phase, currentTrack, error } = state;
+  const { isReady } = useSpotifyPlayer();
 
   // Show error banner
   if (error) {
@@ -16,9 +18,6 @@ export default function GameBoard() {
       <div className="w-full max-w-xl mx-auto">
         <div className="bg-red-900/40 border border-red-700/60 rounded-xl p-6 text-center">
           <p className="text-red-300 text-lg mb-1">⚠️ {error}</p>
-          <p className="text-red-400/60 text-sm">
-            Check the playlist URL and try again.
-          </p>
         </div>
       </div>
     );
@@ -52,13 +51,7 @@ export default function GameBoard() {
       {currentTrack && (
         <AudioPlayer
           track={currentTrack}
-          isPlaying={phase === "playing"}
-          onEnd={() => {
-            // Auto-reveal when the 30s clip ends
-            if (phase === "playing") {
-              dispatch({ type: "REVEAL" });
-            }
-          }}
+          isPlaying={(phase === "playing" || phase === "revealed") && isReady}
         />
       )}
 
@@ -68,7 +61,9 @@ export default function GameBoard() {
             <p className="text-xl text-white font-semibold">
               {state.tracks.length} songs loaded
             </p>
-            <p className="text-spotify-gray">Press Start to begin!</p>
+            <p className="text-spotify-gray">
+              {isReady ? "Press Start to begin!" : "Waiting for player..."}
+            </p>
           </div>
         )}
 

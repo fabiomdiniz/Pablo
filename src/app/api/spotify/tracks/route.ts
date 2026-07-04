@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { extractPlaylistId, getPlaylistTracksAll, filterPlayable } from "@/lib/spotify";
+import {
+  extractPlaylistId,
+  getPlaylistTracksAll,
+  toGameTracks,
+  getUserTokenCache,
+  setUserTokenCache,
+} from "@/lib/spotify";
 import type { GameTrack } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -28,10 +34,12 @@ export async function POST(request: Request) {
 
     // Fetch tracks from all playlists
     const allTracks: GameTrack[] = [];
+    let totalFetched = 0;
 
     for (const playlistId of playlistIds) {
       const rawTracks = await getPlaylistTracksAll(playlistId);
-      const playable = filterPlayable(rawTracks);
+      totalFetched += rawTracks.length;
+      const playable = toGameTracks(rawTracks);
       allTracks.push(...playable);
     }
 
@@ -39,13 +47,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "No playable tracks found. All songs in these playlists lack a 30-second preview clip.",
+            `No playable tracks found. Fetched ${totalFetched} tracks total, ` +
+            `but none have a 30-second Spotify preview clip. ` +
+            `Try a playlist with more popular/mainstream songs.`,
         },
         { status: 404 }
       );
     }
 
-    // Deduplicate by track ID
+    // Deduplicate
     const seen = new Set<string>();
     const unique = allTracks.filter((t) => {
       if (seen.has(t.id)) return false;
@@ -53,11 +63,32 @@ export async function POST(request: Request) {
       return true;
     });
 
-    return NextResponse.json({ tracks: unique, total: unique.length });
+    // Persist refreshed tokens if they were updated
+    const refreshedTokens = getUserTokenCache();
+    const response = NextResponse.json({ tracks: unique, total: unique.length });
+
+    if (refreshedTokens) {
+      response.cookies.set("pablo_spotify_tokens", JSON.stringify(refreshedTokens), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 30,
+        path: "/",
+      });
+      setUserTokenCache(null);
+    }
+
+    return response;
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "An unexpected error occurred.";
     console.error("Tracks API error:", message);
+
+    // If the error is about authentication, return 401 so the frontend can show login
+    if (message.includes("Not authenticated") || message.includes("log in")) {
+      return NextResponse.json({ error: message, needsAuth: true }, { status: 401 });
+    }
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
