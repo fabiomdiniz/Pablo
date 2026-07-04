@@ -18,8 +18,8 @@ interface SpotifyPlayerConfig {
 }
 
 interface SpotifyPlayerInstance {
-  addListener: (event: string, cb: (state: unknown) => void) => boolean;
-  removeListener: (event: string, cb?: (state: unknown) => void) => boolean;
+  addListener: (event: string, cb: (state: any) => void) => boolean;
+  removeListener: (event: string, cb?: (state: any) => void) => boolean;
   connect: () => Promise<boolean>;
   disconnect: () => void;
   getVolume: () => Promise<number>;
