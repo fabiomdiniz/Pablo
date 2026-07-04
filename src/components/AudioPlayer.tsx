@@ -6,6 +6,12 @@ import type { GameTrack } from "@/lib/types";
 
 const SNIPPET_DURATION_MS = 30_000; // 30 seconds
 
+interface AudioPlayerProps {
+  track: GameTrack | null;
+  isPlaying: boolean;
+  onEnd?: () => void;
+}
+
 /** Pick a random position between 20% and 70% of the track */
 function randomMidpoint(durationMs: number): number {
   const min = Math.floor(durationMs * 0.2);
