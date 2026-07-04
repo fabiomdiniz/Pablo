@@ -27,7 +27,7 @@ export async function GET() {
       "https://api.spotify.com/v1/me/playlists?limit=50";
 
     while (url) {
-      const res = await fetch(url, {
+      const res: Response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
