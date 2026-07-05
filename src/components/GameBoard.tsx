@@ -52,7 +52,7 @@ export default function GameBoard() {
       {currentTrack && (
         <AudioPlayer
           track={currentTrack}
-          isPlaying={(phase === "playing" || phase === "revealed") && isReady}
+          isPlaying={(phase === "playing" || phase === "revealed") && (musicSource === "deezer" || isReady)}
         />
       )}
 
@@ -63,7 +63,7 @@ export default function GameBoard() {
               {state.tracks.length} songs loaded
             </p>
             <p className="text-spotify-gray">
-              {isReady ? "Press Start to begin!" : "Waiting for player..."}
+              {musicSource === "deezer" || isReady ? "Press Start to begin!" : "Waiting for player..."}
             </p>
           </div>
         )}

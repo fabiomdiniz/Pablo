@@ -4,7 +4,7 @@ import { useGame } from "@/context/GameContext";
 import { useSpotifyPlayer } from "@/context/SpotifyPlayerContext";
 
 export default function GameControls() {
-  const { state, dispatch, reloadTracks } = useGame();
+  const { state, dispatch, reloadTracks, musicSource } = useGame();
   const { isReady: playerReady } = useSpotifyPlayer();
   const { phase } = state;
 
@@ -37,10 +37,10 @@ export default function GameControls() {
         {phase === "ready" && (
           <button
             onClick={() => dispatch({ type: "START_GAME" })}
-            disabled={!playerReady}
+            disabled={musicSource !== "deezer" && !playerReady}
             className="px-10 py-3 bg-spotify-green text-black font-bold rounded-full hover:bg-green-400 transition-all text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {playerReady ? "▶ Start Game" : "Waiting for player..."}
+            {musicSource === "deezer" || playerReady ? "▶ Start Game" : "Waiting for player..."}
           </button>
         )}
 
