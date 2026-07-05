@@ -10,6 +10,7 @@ import GameControls from "./GameControls";
 export default function GameBoard() {
   const { state } = useGame();
   const { phase, currentTrack, error } = state;
+  const { musicSource } = useGame();
   const { isReady } = useSpotifyPlayer();
 
   // Show error banner
@@ -28,7 +29,7 @@ export default function GameBoard() {
     return (
       <div className="flex flex-col items-center gap-4 py-16">
         <div className="w-12 h-12 border-4 border-spotify-green/30 border-t-spotify-green rounded-full animate-spin" />
-        <p className="text-spotify-gray">Fetching tracks from Spotify...</p>
+        <p className="text-spotify-gray">Fetching tracks from {musicSource === "deezer" ? "Deezer" : "Spotify"}...</p>
       </div>
     );
   }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useGame } from "@/context/GameContext";
+import type { MusicSource } from "@/lib/types";
 
 interface Playlist {
   id: string;
@@ -14,32 +16,50 @@ interface PlaylistPickerProps {
 }
 
 export default function PlaylistPicker({ selected, onChange }: PlaylistPickerProps) {
+  const { musicSource, spotifyAuth, deezerAuth } = useGame();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const apiPath = musicSource === "deezer" ? "/api/deezer/playlists" : "/api/spotify/playlists";
+  const isAuthed = musicSource === "deezer" ? true : spotifyAuth; // Deezer works without login
+
   useEffect(() => {
-    fetch("/api/spotify/playlists")
+    setPlaylists([]);
+    setError(null);
+    setLoading(true);
+
+    if (!isAuthed) {
+      setLoading(false);
+      return;
+    }
+
+    fetch(apiPath)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
           setError(data.error);
         } else {
-          setPlaylists(data.playlists);
+          setPlaylists(data.playlists || []);
         }
       })
       .catch(() => setError("Failed to load playlists."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiPath, isAuthed]);
 
   const toggle = (id: string) => {
-    const url = `https://open.spotify.com/playlist/${id}`;
+    const url =
+      musicSource === "deezer"
+        ? `https://deezer.com/playlist/${id.replace("dz_", "")}`
+        : `https://open.spotify.com/playlist/${id}`;
     if (selected.includes(url)) {
       onChange(selected.filter((u) => u !== url));
     } else {
       onChange([...selected, url]);
     }
   };
+
+  if (!isAuthed) return null;
 
   if (loading) {
     return (
@@ -63,11 +83,14 @@ export default function PlaylistPicker({ selected, onChange }: PlaylistPickerPro
   return (
     <div className="w-full max-w-xl mx-auto mb-8">
       <h3 className="text-sm font-medium text-spotify-gray mb-3">
-        Your playlists ({playlists.length})
+        {musicSource === "deezer" ? "Top Deezer" : "Your Spotify"} playlists ({playlists.length})
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
         {playlists.map((p) => {
-          const url = `https://open.spotify.com/playlist/${p.id}`;
+          const url =
+            musicSource === "deezer"
+              ? `https://deezer.com/playlist/${p.id.replace("dz_", "")}`
+              : `https://open.spotify.com/playlist/${p.id}`;
           const isSelected = selected.includes(url);
           return (
             <button
@@ -80,11 +103,7 @@ export default function PlaylistPicker({ selected, onChange }: PlaylistPickerPro
               }`}
             >
               {p.image ? (
-                <img
-                  src={p.image}
-                  alt=""
-                  className="w-10 h-10 rounded flex-shrink-0 object-cover"
-                />
+                <img src={p.image} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
               ) : (
                 <div className="w-10 h-10 rounded bg-spotify-light flex-shrink-0 flex items-center justify-center">
                   <svg className="w-4 h-4 text-spotify-gray" fill="currentColor" viewBox="0 0 24 24">
@@ -95,9 +114,7 @@ export default function PlaylistPicker({ selected, onChange }: PlaylistPickerPro
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-white truncate">{p.name}</p>
               </div>
-              {isSelected && (
-                <span className="text-spotify-green text-lg flex-shrink-0">✓</span>
-              )}
+              {isSelected && <span className="text-spotify-green text-lg flex-shrink-0">✓</span>}
             </button>
           );
         })}

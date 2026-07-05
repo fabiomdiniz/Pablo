@@ -56,25 +56,18 @@ interface StoredTokens {
 
 const COOKIE_NAME = "pablo_spotify_tokens";
 
-export function getTokensFromCookies(): StoredTokens | null {
-  const cookieStore = cookies();
-  const raw = cookieStore.get(COOKIE_NAME)?.value;
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StoredTokens;
-  } catch {
-    return null;
+export async function getAccessToken(
+  requestCookies?: { get: (name: string) => { value: string } | undefined }
+): Promise<string> {
+  let tokens: StoredTokens | null = null;
+
+  // Read from request cookies
+  if (requestCookies) {
+    try {
+      const raw = requestCookies.get(COOKIE_NAME)?.value;
+      if (raw) tokens = JSON.parse(raw) as StoredTokens;
+    } catch { /* ignore */ }
   }
-}
-
-export function setTokensCookie(tokens: StoredTokens) {
-  // We can't set cookies in a module — this is called from route handlers
-  // that use next/headers cookies() API. For now this is a placeholder;
-  // the actual cookie set happens in the callback route.
-}
-
-export async function getAccessToken(): Promise<string> {
-  const tokens = getTokensFromCookies();
 
   // If we have a valid user token, use it
   if (tokens && Date.now() < tokens.expires_at - 60_000) {
@@ -141,6 +134,7 @@ export async function getAuthorizationUrl(): Promise<{
     code_challenge_method: "S256",
     code_challenge: challenge,
     scope: "playlist-read-private playlist-read-collaborative streaming user-modify-playback-state user-read-playback-state",
+    show_dialog: "true",
   });
 
   return { url: `${AUTH_URL}?${params.toString()}`, verifier };
@@ -214,9 +208,10 @@ async function spotifyFetch(url: string, token: string) {
 }
 
 export async function getPlaylistTracksAll(
-  playlistId: string
+  playlistId: string,
+  cookies?: { get: (name: string) => { value: string } | undefined }
 ): Promise<SpotifyTrack[]> {
-  const token = await getAccessToken();
+  const token = await getAccessToken(cookies);
   let url: string | null =
     `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100`;
 
@@ -236,11 +231,13 @@ export async function getPlaylistTracksAll(
 /* ── Convert to GameTrack ── */
 
 export function toGameTrack(track: SpotifyTrack): GameTrack {
-  const releaseDate = track.album.release_date;
+  const releaseDate = track.album.release_date || "";
   const releaseYear =
-    track.album.release_date_precision === "year"
-      ? releaseDate
-      : releaseDate.slice(0, 4);
+    releaseDate
+      ? track.album.release_date_precision === "year"
+        ? releaseDate
+        : releaseDate.slice(0, 4)
+      : "—";
 
   const albumArt =
     track.album.images.length > 0
@@ -256,6 +253,8 @@ export function toGameTrack(track: SpotifyTrack): GameTrack {
     releaseDate,
     releaseYear,
     albumArt,
+    previewUrl: "",
+    source: "spotify" as const,
   };
 }
 

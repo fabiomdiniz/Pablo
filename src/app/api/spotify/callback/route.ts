@@ -1,42 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { exchangeCodeForTokens } from "@/lib/spotify";
+
+function getBaseUrl(request: NextRequest): string {
+  if (process.env.NODE_ENV === "production") {
+    return new URL("/", request.url).origin;
+  }
+  return "http://127.0.0.1:3000";
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
+  const base = getBaseUrl(request);
 
-  // User denied access
   if (error) {
-    const url = new URL("/?error=spotify_auth_denied", request.url);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL("/?error=spotify_auth_denied", base));
   }
 
   if (!code) {
-    const url = new URL("/?error=missing_code", request.url);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL("/?error=missing_code", base));
   }
 
   try {
-    // Get the PKCE verifier from the login cookie
-    const cookieStore = cookies();
-    const verifierCookie = cookieStore.get("pablo_pkce_verifier");
+    // Use request.cookies instead of cookies() from next/headers
+    const verifier = request.cookies.get("pablo_pkce_verifier")?.value;
 
-    if (!verifierCookie?.value) {
-      const url = new URL("/?error=pkce_expired", request.url);
-      return NextResponse.redirect(url);
+    if (!verifier) {
+      return NextResponse.redirect(new URL("/?error=pkce_expired", base));
     }
 
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens(code, verifierCookie.value);
-
-    // Store tokens in a persistent cookie
+    const tokens = await exchangeCodeForTokens(code, verifier);
     const tokenData = JSON.stringify(tokens);
 
-    // Build response and set cookies ON the response object
-    const url = new URL("/", request.url);
-    const response = NextResponse.redirect(url);
+    const response = NextResponse.redirect(new URL("/", base));
 
     response.cookies.set("pablo_spotify_tokens", tokenData, {
       httpOnly: true,
@@ -46,28 +43,17 @@ export async function GET(request: NextRequest) {
       path: "/",
     });
 
-    response.cookies.set("pablo_pkce_verifier", "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-      path: "/",
-    });
+    response.cookies.delete("pablo_pkce_verifier");
 
-    // Also update in-memory cache
     const { setUserTokenCache } = await import("@/lib/spotify");
     setUserTokenCache(tokens);
 
-    console.log("[Auth] Token exchange successful, redirecting to /");
     return response;
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "Token exchange failed";
+    const message = err instanceof Error ? err.message : "Token exchange failed";
     console.error("Callback error:", message);
-    const url = new URL(
-      `/?error=auth_failed&message=${encodeURIComponent(message)}`,
-      request.url
+    return NextResponse.redirect(
+      new URL(`/?error=auth_failed&message=${encodeURIComponent(message)}`, base)
     );
-    return NextResponse.redirect(url);
   }
 }

@@ -43,12 +43,7 @@ export default function RevealedCard({ track }: RevealedCardProps) {
         <div className="px-4 py-1.5 bg-spotify-green/20 border border-spotify-green/40 rounded-full">
           <span className="text-sm text-spotify-gray">Released: </span>
           <span className="text-sm font-semibold text-spotify-green">
-            {track.releaseDate}
-          </span>
-        </div>
-        <div className="px-4 py-1.5 bg-spotify-light rounded-full">
-          <span className="text-sm font-semibold text-white">
-            {track.releaseYear}
+            {track.releaseYear || track.releaseDate}
           </span>
         </div>
       </div>

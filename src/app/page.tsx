@@ -1,23 +1,24 @@
 "use client";
 
-import { useEffect, useRef, Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, Suspense } from "react";
 import { GameProvider, useGame } from "@/context/GameContext";
 import { SpotifyPlayerProvider, useSpotifyPlayer } from "@/context/SpotifyPlayerContext";
 import PlaylistInput from "@/components/PlaylistInput";
 import GameBoard from "@/components/GameBoard";
+import type { MusicSource } from "@/lib/types";
+
+/* ── Player status (Spotify only) ── */
 
 function PlayerStatus() {
   const { isReady, errorMessage } = useSpotifyPlayer();
+  const { musicSource } = useGame();
+  if (musicSource !== "spotify") return null;
 
   if (errorMessage) {
     return (
-      <div className="w-full max-w-xl mb-4 bg-red-900/40 border border-red-700/60 rounded-lg p-3 text-sm text-red-300 text-center">
-        {errorMessage}
-      </div>
+      <div className="w-full max-w-xl mb-4 bg-red-900/40 border border-red-700/60 rounded-lg p-3 text-sm text-red-300 text-center">{errorMessage}</div>
     );
   }
-
   if (!isReady) {
     return (
       <div className="w-full max-w-xl mb-4 bg-yellow-900/30 border border-yellow-700/40 rounded-lg p-3 text-sm text-yellow-300 text-center flex items-center justify-center gap-2">
@@ -26,7 +27,6 @@ function PlayerStatus() {
       </div>
     );
   }
-
   return (
     <div className="w-full max-w-xl mb-2 flex justify-end">
       <span className="text-xs text-spotify-green/70">✓ Player ready</span>
@@ -34,43 +34,98 @@ function PlayerStatus() {
   );
 }
 
+/* ── Login screen ── */
+
+function LoginScreen() {
+  const { musicSource, setMusicSource } = useGame();
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-12">
+      <div className="bg-spotify-light/40 rounded-2xl p-8 text-center max-w-md w-full">
+        <h2 className="text-xl font-bold text-white mb-1">Choose your music source</h2>
+        <p className="text-spotify-gray text-sm mb-6">
+          Log in to load playlists and start guessing
+        </p>
+
+        {/* Source selector */}
+        <div className="flex gap-2 mb-6 bg-spotify-dark rounded-full p-1">
+          {(["spotify", "deezer"] as MusicSource[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setMusicSource(s)}
+              className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all ${
+                musicSource === s
+                  ? "bg-spotify-green text-black"
+                  : "text-spotify-gray hover:text-white"
+              }`}
+            >
+              {s === "spotify" ? "Spotify" : "Deezer"}
+            </button>
+          ))}
+        </div>
+
+        {/* Spotify login */}
+        {musicSource === "spotify" && (
+          <div className="space-y-4">
+            <a
+              href="/api/spotify/login"
+              className="inline-block px-8 py-3 bg-[#1DB954] text-black font-bold rounded-full hover:bg-green-400 transition-all text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 w-full"
+            >
+              Log in with Spotify
+            </a>
+            <p className="text-spotify-gray/50 text-xs">
+              Premium account required for playback
+            </p>
+          </div>
+        )}
+
+        {/* Deezer — no login needed */}
+        {musicSource === "deezer" && (
+          <div className="space-y-4">
+            <button
+              onClick={() => setMusicSource("deezer")}
+              className="inline-block px-8 py-3 bg-[#FF0092] text-white font-bold rounded-full hover:bg-pink-500 transition-all text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 w-full"
+            >
+              Continue with Deezer
+            </button>
+            <p className="text-spotify-gray/60 text-xs leading-relaxed">
+              <strong>No login required!</strong> Deezer provides 30-second previews for free.
+              Just paste any Deezer playlist URL to start playing.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main app content ── */
+
 function AppContent() {
-  const { isAuthenticated, authChecked, checkAuth, state, fetchTracks } = useGame();
-  const router = useRouter();
+  const { spotifyAuth, deezerAuth, authChecked, checkAuth, musicSource, setMusicSource, state, fetchTracks } = useGame();
   const autoLoaded = useRef(false);
 
-  // Parse playlist URLs from the address bar
-  function getPlaylistsFromUrl(): string[] {
-    if (typeof window === "undefined") return [];
-    return new URLSearchParams(window.location.search).getAll("p");
-  }
+  const isAuthed = musicSource === "deezer" ? true : spotifyAuth; // Deezer needs no login
 
-  const [urlPlaylists, setUrlPlaylists] = useState<string[]>([]);
-
-  // On mount + auth ready, parse URL and auto-load
+  // Auto-load playlists from URL on first auth
   useEffect(() => {
-    const urls = getPlaylistsFromUrl();
-    setUrlPlaylists(urls);
-  }, []);
-
-  useEffect(() => {
-    if (!authChecked || !isAuthenticated || autoLoaded.current) return;
-    const urls = getPlaylistsFromUrl();
+    if (!authChecked || !isAuthed || autoLoaded.current) return;
+    if (typeof window === "undefined") return;
+    const urls = new URLSearchParams(window.location.search).getAll("p");
     if (urls.length > 0) {
       autoLoaded.current = true;
       fetchTracks(urls);
     }
-  }, [authChecked, isAuthenticated, fetchTracks]);
+  }, [authChecked, isAuthed, fetchTracks]);
 
-  // Reset auto-loaded flag on game reset
+  // Reset flag on game reset
   const prevPhase = useRef(state.phase);
   useEffect(() => {
     if (state.phase === "idle" && prevPhase.current !== "idle") {
       autoLoaded.current = false;
-      router.replace("/", { scroll: false });
     }
     prevPhase.current = state.phase;
-  }, [state.phase, router]);
+  }, [state.phase]);
 
   if (!authChecked) {
     return (
@@ -80,48 +135,51 @@ function AppContent() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center gap-6 py-16">
-        <div className="bg-spotify-light/40 rounded-2xl p-10 text-center max-w-md">
-          <svg className="w-16 h-16 text-spotify-green mx-auto mb-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-          </svg>
-          <h2 className="text-xl font-bold text-white mb-2">Log in with Spotify</h2>
-          <p className="text-spotify-gray text-sm mb-6">
-            Pablo needs your Spotify account to access playlist tracks and play music.
-            A Premium account is required for full song playback.
-          </p>
-          <a
-            href="/api/spotify/login"
-            className="inline-block px-8 py-3 bg-spotify-green text-black font-bold rounded-full hover:bg-green-400 transition-all text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
-          >
-            Log in with Spotify
-          </a>
-          <p className="text-spotify-gray/50 text-xs mt-4">
-            You&apos;ll be redirected to Spotify to authorize, then back here.
-          </p>
-        </div>
-      </div>
-    );
+  if (!isAuthed) {
+    return <LoginScreen />;
   }
 
   return (
     <SpotifyPlayerProvider>
-      <div className="flex items-center justify-end w-full max-w-xl mb-2">
-        <span className="text-xs text-spotify-green/70 mr-2">✓ Connected to Spotify</span>
-        <button
-          onClick={async () => {
-            await fetch("/api/spotify/logout");
-            checkAuth();
-          }}
-          className="text-xs text-spotify-gray hover:text-white underline transition-colors"
-        >
-          Disconnect
-        </button>
+      {/* Top bar */}
+      <div className="flex items-center justify-between w-full max-w-xl mb-2">
+        {/* Source switch */}
+        <div className="flex gap-1 bg-spotify-dark rounded-full p-0.5">
+          {(["spotify", "deezer"] as MusicSource[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setMusicSource(s)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                musicSource === s
+                  ? "bg-spotify-green text-black"
+                  : "text-spotify-gray hover:text-white"
+              }`}
+            >
+              {s === "spotify" ? "Spotify" : "Deezer"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-spotify-green/70">
+            ✓ {musicSource === "deezer" ? "Deezer" : "Spotify"}
+          </span>
+          {musicSource === "spotify" && (
+            <button
+              onClick={async () => {
+                await fetch("/api/spotify/logout");
+                checkAuth();
+              }}
+              className="text-xs text-spotify-gray hover:text-white underline transition-colors"
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
       </div>
+
       <PlayerStatus />
-      <PlaylistInput key={urlPlaylists.join(",") || "empty"} initialUrls={urlPlaylists} />
+      <PlaylistInput key={`${musicSource}-${isAuthed}`} initialUrls={[]} />
       <GameBoard />
     </SpotifyPlayerProvider>
   );
@@ -144,7 +202,7 @@ export default function Home() {
         </Suspense>
 
         <footer className="mt-auto pt-16 pb-4 text-center text-xs text-spotify-gray/50">
-          Powered by Spotify Web API
+          Powered by Spotify & Deezer APIs
         </footer>
       </main>
     </GameProvider>

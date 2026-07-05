@@ -1,3 +1,7 @@
+/* ── Music source ── */
+
+export type MusicSource = "spotify" | "deezer";
+
 /* ── Spotify API response shapes ── */
 
 export interface SpotifyTrack {
@@ -23,7 +27,36 @@ export interface PlaylistItemsResponse {
   total: number;
 }
 
-/* ── Our app's track shape ── */
+/* ── Deezer API response shapes ── */
+
+export interface DeezerTrack {
+  id: number;
+  title: string;
+  preview: string;
+  duration: number;
+  artist: { name: string };
+  album: {
+    id: number;
+    title: string;
+    cover_medium: string;
+  };
+  release_date?: string;
+}
+
+export interface DeezerPlaylistTracksResponse {
+  data: DeezerTrack[];
+  total: number;
+  next?: string;
+}
+
+export interface DeezerPlaylist {
+  id: number;
+  title: string;
+  picture_medium: string;
+  nb_tracks: number;
+}
+
+/* ── Our app's unified track shape ── */
 
 export interface GameTrack {
   id: string;
@@ -34,6 +67,8 @@ export interface GameTrack {
   releaseDate: string;
   releaseYear: string;
   albumArt: string;
+  previewUrl: string; // Deezer: 30s MP3; Spotify: empty string
+  source: MusicSource;
 }
 
 /* ── Game state machine ── */

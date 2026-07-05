@@ -110,8 +110,8 @@ export function SpotifyPlayerProvider({ children }: { children: React.ReactNode 
       });
 
       player.addListener("authentication_error", ({ message }: { message: string }) => {
-        console.error("[Player] Auth error:", message);
-        setErrorMessage("Auth failed — click Disconnect, then Log in with Spotify again.");
+        // Transient — don't show error banner, the SDK may recover
+        console.warn("[Player] Auth warning (may be transient):", message);
       });
 
       player.addListener("account_error", ({ message }: { message: string }) => {

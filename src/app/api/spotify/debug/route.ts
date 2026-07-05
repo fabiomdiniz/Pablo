@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken, extractPlaylistId } from "@/lib/spotify";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const playlistUrl = searchParams.get("playlist");
 
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(request.cookies);
     const maskedToken = token.slice(0, 10) + "..." + token.slice(-5);
 
     const result: Record<string, unknown> = {

@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken } from "@/lib/spotify";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(request.cookies);
 
     // Get current user's ID
     const meRes = await fetch("https://api.spotify.com/v1/me", {

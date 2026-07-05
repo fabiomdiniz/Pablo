@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   extractPlaylistId,
   getPlaylistTracksAll,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/spotify";
 import type { GameTrack } from "@/lib/types";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { urls }: { urls: string[] } = await request.json();
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     let totalFetched = 0;
 
     for (const playlistId of playlistIds) {
-      const rawTracks = await getPlaylistTracksAll(playlistId);
+      const rawTracks = await getPlaylistTracksAll(playlistId, request.cookies);
       totalFetched += rawTracks.length;
       const playable = toGameTracks(rawTracks);
       allTracks.push(...playable);

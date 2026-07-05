@@ -5,7 +5,7 @@ import { useGame } from "@/context/GameContext";
 import PlaylistPicker from "./PlaylistPicker";
 
 export default function PlaylistInput({ initialUrls = [] }: { initialUrls?: string[] }) {
-  const { state, fetchTracks, dispatch, reloadTracks, lastUrls } = useGame();
+  const { state, fetchTracks, dispatch, reloadTracks, lastUrls, musicSource } = useGame();
   const [input, setInput] = useState(initialUrls.join("\n"));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -58,7 +58,9 @@ export default function PlaylistInput({ initialUrls = [] }: { initialUrls?: stri
 
       <form onSubmit={handleSubmit}>
         <label className="block text-sm font-medium text-spotify-gray mb-2">
-          Paste Spotify playlist URL(s) — one per line or comma-separated
+          {musicSource === "deezer"
+            ? "Paste Deezer playlist URL(s) — one per line or comma-separated"
+            : "Paste Spotify playlist URL(s) — one per line or comma-separated"}
         </label>
         <div className="relative">
           <textarea
@@ -67,7 +69,9 @@ export default function PlaylistInput({ initialUrls = [] }: { initialUrls?: stri
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
             placeholder={
-              "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M\nhttps://open.spotify.com/playlist/...\nspotify:playlist:37i9dQZF1DXcBWIGoYBM5M"
+              musicSource === "deezer"
+                ? "https://www.deezer.com/playlist/12345678\nhttps://deezer.com/playlist/...\n12345678"
+                : "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M\nhttps://open.spotify.com/playlist/...\nspotify:playlist:37i9dQZF1DXcBWIGoYBM5M"
             }
             rows={3}
             className="w-full px-4 py-3 bg-spotify-light border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-spotify-green focus:border-transparent resize-none disabled:opacity-50"
@@ -75,7 +79,9 @@ export default function PlaylistInput({ initialUrls = [] }: { initialUrls?: stri
         </div>
         <div className="flex items-center justify-between mt-3">
           <div className="text-xs text-spotify-gray">
-            Supports: open.spotify.com/playlist/... or spotify:playlist:...
+            {musicSource === "deezer"
+              ? "Supports: deezer.com/playlist/... or plain IDs"
+              : "Supports: open.spotify.com/playlist/... or spotify:playlist:..."}
           </div>
           {!tracksLoaded ? (
             <button
